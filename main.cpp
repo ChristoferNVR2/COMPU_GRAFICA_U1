@@ -8,7 +8,6 @@ using Matrix = std::vector<std::vector<T>>;
 
 template<typename T>
 Matrix<T> multiplyMatrices(const Matrix<T>& A, const Matrix<T>& B) {
-    // Check if matrices are empty
     if (A.empty() || B.empty() || A[0].empty() || B[0].empty()) {
         throw std::invalid_argument("Matrices cannot be empty");
     }
@@ -18,14 +17,12 @@ Matrix<T> multiplyMatrices(const Matrix<T>& A, const Matrix<T>& B) {
     size_t rows_B = B.size();
     size_t cols_B = B[0].size();
 
-    // Check if multiplication is possible (columns of A must equal rows of B)
     if (cols_A != rows_B) {
         throw std::invalid_argument("Matrix multiplication not possible: columns of first matrix ("
                                   + std::to_string(cols_A) + ") must equal rows of second matrix ("
                                   + std::to_string(rows_B) + ")");
     }
 
-    // Verify that all rows in each matrix have the same number of columns
     for (const auto& row : A) {
         if (row.size() != cols_A) {
             throw std::invalid_argument("First matrix has inconsistent row sizes");
@@ -37,10 +34,8 @@ Matrix<T> multiplyMatrices(const Matrix<T>& A, const Matrix<T>& B) {
         }
     }
 
-    // Initialize result matrix with zeros
     Matrix<T> result(rows_A, std::vector<T>(cols_B, T{}));
 
-    // Perform matrix multiplication
     for (size_t i = 0; i < rows_A; ++i) {
         for (size_t j = 0; j < cols_B; ++j) {
             for (size_t k = 0; k < cols_A; ++k) {
@@ -53,11 +48,63 @@ Matrix<T> multiplyMatrices(const Matrix<T>& A, const Matrix<T>& B) {
 }
 
 template<typename T>
+Matrix<T> createTranslationMatrix(T tx, T ty, T tz) {
+    Matrix<T> translation = {
+        {1, 0, 0, tx},
+        {0, 1, 0, ty},
+        {0, 0, 1, tz},
+        {0, 0, 0, 1}
+    };
+    return translation;
+}
+
+template<typename T>
+Matrix<T> createScaleMatrix(T sx, T sy, T sz) {
+    Matrix<T> scale = {
+        {sx, 0,  0,  0},
+        {0,  sy, 0,  0},
+        {0,  0,  sz, 0},
+        {0,  0,  0,  1}
+    };
+    return scale;
+}
+
+// template<typename T>
+// Matrix<T> createScaleMatrixAroundPoint(T sx, T sy, T sz, T px, T py, T pz) {
+//     // Translate to origin -> Scale -> Translate back
+//     Matrix<T> translateToOrigin = createTranslationMatrix(-px, -py, -pz);
+//     Matrix<T> scale = createScaleMatrix(sx, sy, sz);
+//     Matrix<T> translateBack = createTranslationMatrix(px, py, pz);
+//
+//     Matrix<T> temp = multiplyMatrices(scale, translateToOrigin);
+//     return multiplyMatrices(translateBack, temp);
+// }
+
+// template<typename T>
+// Matrix<T> createScaleMatrixAroundPoint(T sx, T sy, T sz, T px, T py, T pz) {
+//     Matrix<T> scale = createScaleMatrix(sx, sy, sz);
+//     Matrix<T> translate = createTranslationMatrix(px * (1 - sx), py * (1 - sy), pz * (1 - sz));
+//     return multiplyMatrices(translate, scale);
+// }
+
+template<typename T>
+Matrix<T> createScaleMatrixAroundPoint(T sx, T sy, T sz, T px, T py, T pz) {
+    return {
+        {sx, 0,  0,  px * (1 - sx)},
+        {0,  sy, 0,  py * (1 - sy)},
+        {0,  0,  sz, pz * (1 - sz)},
+        {0,  0,  0,  1}
+    };
+}
+
+
+template<typename T>
 void printMatrix(const Matrix<T>& matrix, const std::string& name) {
     std::cout << name << ":\n";
     for (const auto& row : matrix) {
         for (const auto& element : row) {
-            std::cout << std::setw(8) << std::setprecision(2) << element << " ";
+            // std::cout << std::setw(8) << std::setprecision(2) << element << " ";
+            std::cout << std::setw(8) << element << " ";
         }
         std::cout << "\n";
     }
@@ -66,84 +113,85 @@ void printMatrix(const Matrix<T>& matrix, const std::string& name) {
 
 int main() {
     try {
-        // Example 1: Integer matrices (3x2) * (2x3) = (3x3)
-        Matrix<int> A1 = {
-            {1, 2},
-            {3, 4},
-            {5, 6}
+        // std::cout << "=== Transformation Matrices ===\n\n";
+        //
+        // auto translation = createTranslationMatrix(2.0f, 3.0f, 1.0f);
+        // printMatrix(translation, "Translation Matrix (2, 3, 1)");
+        //
+        // auto scale = createScaleMatrix(2.0f, 1.5f, 0.5f);
+        // printMatrix(scale, "Scale Matrix (2x, 1.5y, 0.5z)");
+        //
+        // auto scaleAroundPoint = createScaleMatrixAroundPoint(2.0f, 2.0f, 2.0f, 1.0f, 1.0f, 1.0f);
+        // printMatrix(scaleAroundPoint, "Scale 2x around point (1, 1, 1)");
+
+
+
+
+
+        // std::cout << "=== Performing Transformations ===\n\n";
+        // Matrix<float> point = {{2.0f}, {2.0f}, {2.0f}, {1.0f}};
+        // printMatrix(point, "Original Point (2, 2, 2)");
+        //
+        // auto translatedPoint = multiplyMatrices(translation, point);
+        // printMatrix(translatedPoint, "After Translation");
+        //
+        // auto scaledPoint = multiplyMatrices(scale, point);
+        // printMatrix(scaledPoint, "After Scale from Origin");
+        //
+        // auto scaledAroundPointResult = multiplyMatrices(scaleAroundPoint, point);
+        // printMatrix(scaledAroundPointResult, "After Scale around Point (1,1,1)");
+
+
+
+
+
+        // NOTE: Matrices are multiplied in reverse order of application
+        // So, the order is Translate -> Scale (application order)
+        // Theoretically: Transformed = [Translation] * [Rotation] * [Scale] * [Original Vector]
+        // std::cout << "=== Performing Multiple Transformations ===\n";
+        // auto combined = multiplyMatrices(scale, translation);
+        // printMatrix(combined, "Combined: Scale * Translation");
+        //
+        // auto combinedResult = multiplyMatrices(combined, point);
+        // printMatrix(combinedResult, "Point after Combined Transform");
+
+        // Mathematically equivalent to:
+        // auto temp = multiplyMatrices(scale, point);
+        // auto temp2 = multiplyMatrices(temp, translation);
+
+
+
+
+        auto scaleOneThird = createScaleMatrix(1.0f/3.0f, 1.0f/3.0f, 1.0f/3.0f);
+        printMatrix(scaleOneThird, "Reduce to 1/3 relative to origin");
+
+        std::vector<Matrix<float>> cubeVertices = {
+            {{40.0f}, {30.0f}, {0.0f}, {1.0f}},   // p0
+            {{40.0f}, {130.0f}, {0.0f}, {1.0f}},  // p1
+            {{40.0f}, {130.0f}, {80.0f}, {1.0f}}, // p2
+            {{40.0f}, {30.0f}, {80.0f}, {1.0f}},  // p3
+            {{140.0f}, {30.0f}, {0.0f}, {1.0f}},  // p4
+            {{140.0f}, {130.0f}, {0.0f}, {1.0f}}, // p5
+            {{140.0f}, {130.0f}, {80.0f}, {1.0f}},// p6
+            {{140.0f}, {30.0f}, {80.0f}, {1.0f}}  // p7
         };
 
-        Matrix<int> B1 = {
-            {7, 8, 9},
-            {10, 11, 12}
-        };
+        std::cout << "Original Cube Vertices:\n";
+        for (int i = 0; i < cubeVertices.size(); ++i) {
+            printMatrix(cubeVertices[i], "p" + std::to_string(i) +
+                       " (" + std::to_string((int)cubeVertices[i][0][0]) + ", " +
+                       std::to_string((int)cubeVertices[i][1][0]) + ", " +
+                       std::to_string((int)cubeVertices[i][2][0]) + ")");
+        }
 
-        std::cout << "=== Integer Matrix Multiplication ===\n";
-        printMatrix(A1, "Matrix A1 (3x2)");
-        printMatrix(B1, "Matrix B1 (2x3)");
+        std::cout << "Transformed Cube Vertices (1/3 scale from origin):\n";
+        for (int i = 0; i < cubeVertices.size(); ++i) {
+            auto transformedVertex = multiplyMatrices(scaleOneThird, cubeVertices[i]);
+            printMatrix(transformedVertex, "p" + std::to_string(i) + " scaled");
+        }
 
-        Matrix<int> result1 = multiplyMatrices(A1, B1);
-        printMatrix(result1, "Result A1 * B1 (3x3)");
 
-        // Example 2: Double matrices (2x3) * (3x2) = (2x2)
-        Matrix<double> A2 = {
-            {1.5, 2.5, 3.5},
-            {4.5, 5.5, 6.5}
-        };
 
-        Matrix<double> B2 = {
-            {1.1, 2.1},
-            {3.1, 4.1},
-            {5.1, 6.1}
-        };
-
-        std::cout << "=== Double Matrix Multiplication ===\n";
-        printMatrix(A2, "Matrix A2 (2x3)");
-        printMatrix(B2, "Matrix B2 (3x2)");
-
-        Matrix<double> result2 = multiplyMatrices(A2, B2);
-        printMatrix(result2, "Result A2 * B2 (2x2)");
-
-        // Example 3: Demonstrate error handling - incompatible dimensions
-        std::cout << "=== Error Handling Example ===\n";
-        Matrix<int> A3 = {
-            {1, 2, 3},
-            {4, 5, 6}
-        };
-
-        Matrix<int> B3 = {
-            {1, 2},
-            {3, 4}
-        };
-
-        std::cout << "Attempting to multiply incompatible matrices:\n";
-        printMatrix(A3, "Matrix A3 (2x3)");
-        printMatrix(B3, "Matrix B3 (2x2)");
-
-        Matrix<int> result3 = multiplyMatrices(A3, B3);  // This will throw an exception
-
-    } catch (const std::exception& e) {
-        std::cout << "Error: " << e.what() << "\n\n";
-    }
-
-    // Example 4: Float matrices - square matrices
-    try {
-        std::cout << "=== Float Matrix Multiplication (Square Matrices) ===\n";
-        Matrix<float> A4 = {
-            {1.0f, 2.0f},
-            {3.0f, 4.0f}
-        };
-
-        Matrix<float> B4 = {
-            {5.0f, 6.0f},
-            {7.0f, 8.0f}
-        };
-
-        printMatrix(A4, "Matrix A4 (2x2)");
-        printMatrix(B4, "Matrix B4 (2x2)");
-
-        Matrix<float> result4 = multiplyMatrices(A4, B4);
-        printMatrix(result4, "Result A4 * B4 (2x2)");
 
     } catch (const std::exception& e) {
         std::cout << "Error: " << e.what() << "\n";
