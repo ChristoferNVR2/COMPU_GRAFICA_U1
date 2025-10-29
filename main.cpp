@@ -2,6 +2,9 @@
 #include <vector>
 #include <stdexcept>
 #include <iomanip>
+#include <GL/gl.h>
+#include <GL/glut.h>
+#include <cmath>
 
 template<typename T>
 using Matrix = std::vector<std::vector<T>>;
@@ -111,6 +114,56 @@ void printMatrix(const Matrix<T>& matrix, const std::string& name) {
     std::cout << "\n";
 }
 
+
+
+
+
+
+template<typename T>
+Matrix<T> createReflectionX() {
+    Matrix<T> reflection = {
+        {-1, 0,  0,  0},
+        {0,  1,  0,  0},
+        {0,  0,  1,  0},
+        {0,  0,  0,  1}
+    };
+    return reflection;
+}
+
+template<typename T>
+Matrix<T> createReflectionY() {
+    Matrix<T> reflection = {
+        {1,  0,  0,  0},
+        {0, -1,  0,  0},
+        {0,  0,  1,  0},
+        {0,  0,  0,  1}
+    };
+    return reflection;
+}
+
+template<typename T>
+Matrix<T> createReflectionZ() {
+    Matrix<T> reflection = {
+        {1,  0,  0,  0},
+        {0,  1,  0,  0},
+        {0,  0, -1,  0},
+        {0,  0,  0,  1}
+    };
+    return reflection;
+}
+
+template<typename T>
+Matrix<T> createReflectionOrigin() {
+    Matrix<T> reflection = {
+        {-1,  0,  0,  0},
+        {0,  -1,  0,  0},
+        {0,   0, -1,  0},
+        {0,   0,  0,  1}
+    };
+    return reflection;
+}
+
+
 int main() {
     try {
         // std::cout << "=== Transformation Matrices ===\n\n";
@@ -161,11 +214,43 @@ int main() {
 
 
 
+        //
+        // auto scaleOneThird = createScaleMatrix(1.0f/3.0f, 1.0f/3.0f, 1.0f/3.0f);
+        // printMatrix(scaleOneThird, "Reduce to 1/3 relative to origin");
+        //
+        // std::vector<Matrix<float>> cubeVertices = {
+        //     {{40.0f}, {30.0f}, {0.0f}, {1.0f}},   // p0
+        //     {{40.0f}, {130.0f}, {0.0f}, {1.0f}},  // p1
+        //     {{40.0f}, {130.0f}, {80.0f}, {1.0f}}, // p2
+        //     {{40.0f}, {30.0f}, {80.0f}, {1.0f}},  // p3
+        //     {{140.0f}, {30.0f}, {0.0f}, {1.0f}},  // p4
+        //     {{140.0f}, {130.0f}, {0.0f}, {1.0f}}, // p5
+        //     {{140.0f}, {130.0f}, {80.0f}, {1.0f}},// p6
+        //     {{140.0f}, {30.0f}, {80.0f}, {1.0f}}  // p7
+        // };
+        //
+        // std::cout << "Original Cube Vertices:\n";
+        // for (int i = 0; i < cubeVertices.size(); ++i) {
+        //     printMatrix(cubeVertices[i], "p" + std::to_string(i) +
+        //                " (" + std::to_string((int)cubeVertices[i][0][0]) + ", " +
+        //                std::to_string((int)cubeVertices[i][1][0]) + ", " +
+        //                std::to_string((int)cubeVertices[i][2][0]) + ")");
+        // }
+        //
+        // std::cout << "Transformed Cube Vertices (1/3 scale from origin):\n";
+        // for (int i = 0; i < cubeVertices.size(); ++i) {
+        //     auto transformedVertex = multiplyMatrices(scaleOneThird, cubeVertices[i]);
+        //     printMatrix(transformedVertex, "p" + std::to_string(i) + " scaled");
+        // }
 
-        auto scaleOneThird = createScaleMatrix(1.0f/3.0f, 1.0f/3.0f, 1.0f/3.0f);
-        printMatrix(scaleOneThird, "Reduce to 1/3 relative to origin");
 
-        std::vector<Matrix<float>> cubeVertices = {
+
+        const auto reflectX = createReflectionX<float>();
+        const auto reflectY = createReflectionY<float>();
+        const auto reflectZ = createReflectionZ<float>();
+        const auto reflectOrigin = createReflectionOrigin<float>();
+
+        const std::vector<Matrix<float>> cubeVertices = {
             {{40.0f}, {30.0f}, {0.0f}, {1.0f}},   // p0
             {{40.0f}, {130.0f}, {0.0f}, {1.0f}},  // p1
             {{40.0f}, {130.0f}, {80.0f}, {1.0f}}, // p2
@@ -176,22 +261,37 @@ int main() {
             {{140.0f}, {30.0f}, {80.0f}, {1.0f}}  // p7
         };
 
-        std::cout << "Original Cube Vertices:\n";
+        std::cout << "=== Original Cube ===\n";
         for (int i = 0; i < cubeVertices.size(); ++i) {
             printMatrix(cubeVertices[i], "p" + std::to_string(i) +
-                       " (" + std::to_string((int)cubeVertices[i][0][0]) + ", " +
-                       std::to_string((int)cubeVertices[i][1][0]) + ", " +
-                       std::to_string((int)cubeVertices[i][2][0]) + ")");
+                       " (" + std::to_string(static_cast<int>(cubeVertices[i][0][0])) + ", " +
+                       std::to_string(static_cast<int>(cubeVertices[i][1][0])) + ", " +
+                       std::to_string(static_cast<int>(cubeVertices[i][2][0])) + ")");
         }
 
-        std::cout << "Transformed Cube Vertices (1/3 scale from origin):\n";
+        std::cout << "=== Reflection across X-axis (YZ plane) ===\n";
         for (int i = 0; i < cubeVertices.size(); ++i) {
-            auto transformedVertex = multiplyMatrices(scaleOneThird, cubeVertices[i]);
-            printMatrix(transformedVertex, "p" + std::to_string(i) + " scaled");
+            auto reflected = multiplyMatrices(reflectX, cubeVertices[i]);
+            printMatrix(reflected, "p" + std::to_string(i) + " reflected X");
         }
 
+        std::cout << "=== Reflection across Y-axis (XZ plane) ===\n";
+        for (int i = 0; i < cubeVertices.size(); ++i) {
+            auto reflected = multiplyMatrices(reflectY, cubeVertices[i]);
+            printMatrix(reflected, "p" + std::to_string(i) + " reflected Y");
+        }
 
+        std::cout << "=== Reflection across Z-axis (XY plane) ===\n";
+        for (int i = 0; i < cubeVertices.size(); ++i) {
+            auto reflected = multiplyMatrices(reflectZ, cubeVertices[i]);
+            printMatrix(reflected, "p" + std::to_string(i) + " reflected Z");
+        }
 
+        std::cout << "=== Reflection through Origin ===\n";
+        for (int i = 0; i < cubeVertices.size(); ++i) {
+            auto reflected = multiplyMatrices(reflectOrigin, cubeVertices[i]);
+            printMatrix(reflected, "p" + std::to_string(i) + " reflected origin");
+        }
 
     } catch (const std::exception& e) {
         std::cout << "Error: " << e.what() << "\n";
