@@ -2,12 +2,22 @@
 #include <vector>
 #include <stdexcept>
 #include <iomanip>
-#include <GL/gl.h>
-#include <GL/glut.h>
 #include <cmath>
+#include <GL/glut.h>
+#include "GLMatrix.h"
 
 template<typename T>
 using Matrix = std::vector<std::vector<T>>;
+
+// Global variables for camera control
+float cameraAngleX = 30.0f;
+float cameraAngleY = 45.0f;
+float cameraDistance = 500.0f;
+int lastMouseX = 0, lastMouseY = 0;
+bool isRotating = false;
+
+// Visualization mode
+int visualizationMode = 0; // 0: original, 1: X-reflection, 2: Y-reflection, 3: Z-reflection, 4: origin reflection, 5: all
 
 template<typename T>
 Matrix<T> multiplyMatrices(const Matrix<T>& A, const Matrix<T>& B) {
@@ -49,75 +59,6 @@ Matrix<T> multiplyMatrices(const Matrix<T>& A, const Matrix<T>& B) {
 
     return result;
 }
-
-template<typename T>
-Matrix<T> createTranslationMatrix(T tx, T ty, T tz) {
-    Matrix<T> translation = {
-        {1, 0, 0, tx},
-        {0, 1, 0, ty},
-        {0, 0, 1, tz},
-        {0, 0, 0, 1}
-    };
-    return translation;
-}
-
-template<typename T>
-Matrix<T> createScaleMatrix(T sx, T sy, T sz) {
-    Matrix<T> scale = {
-        {sx, 0,  0,  0},
-        {0,  sy, 0,  0},
-        {0,  0,  sz, 0},
-        {0,  0,  0,  1}
-    };
-    return scale;
-}
-
-// template<typename T>
-// Matrix<T> createScaleMatrixAroundPoint(T sx, T sy, T sz, T px, T py, T pz) {
-//     // Translate to origin -> Scale -> Translate back
-//     Matrix<T> translateToOrigin = createTranslationMatrix(-px, -py, -pz);
-//     Matrix<T> scale = createScaleMatrix(sx, sy, sz);
-//     Matrix<T> translateBack = createTranslationMatrix(px, py, pz);
-//
-//     Matrix<T> temp = multiplyMatrices(scale, translateToOrigin);
-//     return multiplyMatrices(translateBack, temp);
-// }
-
-// template<typename T>
-// Matrix<T> createScaleMatrixAroundPoint(T sx, T sy, T sz, T px, T py, T pz) {
-//     Matrix<T> scale = createScaleMatrix(sx, sy, sz);
-//     Matrix<T> translate = createTranslationMatrix(px * (1 - sx), py * (1 - sy), pz * (1 - sz));
-//     return multiplyMatrices(translate, scale);
-// }
-
-template<typename T>
-Matrix<T> createScaleMatrixAroundPoint(T sx, T sy, T sz, T px, T py, T pz) {
-    return {
-        {sx, 0,  0,  px * (1 - sx)},
-        {0,  sy, 0,  py * (1 - sy)},
-        {0,  0,  sz, pz * (1 - sz)},
-        {0,  0,  0,  1}
-    };
-}
-
-
-template<typename T>
-void printMatrix(const Matrix<T>& matrix, const std::string& name) {
-    std::cout << name << ":\n";
-    for (const auto& row : matrix) {
-        for (const auto& element : row) {
-            // std::cout << std::setw(8) << std::setprecision(2) << element << " ";
-            std::cout << std::setw(8) << element << " ";
-        }
-        std::cout << "\n";
-    }
-    std::cout << "\n";
-}
-
-
-
-
-
 
 template<typename T>
 Matrix<T> createReflectionX() {
@@ -163,138 +104,220 @@ Matrix<T> createReflectionOrigin() {
     return reflection;
 }
 
+void drawText(float x, float y, const std::string& text) {
+    glRasterPos2f(x, y);
+    for (char c : text) {
+        glutBitmapCharacter(GLUT_BITMAP_9_BY_15, c);
+    }
+}
 
-int main() {
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLoadIdentity();
+
+    // Set up camera
+    gluLookAt(cameraDistance * cos(cameraAngleY * M_PI / 180.0f) * cos(cameraAngleX * M_PI / 180.0f),
+              cameraDistance * sin(cameraAngleX * M_PI / 180.0f),
+              cameraDistance * sin(cameraAngleY * M_PI / 180.0f) * cos(cameraAngleX * M_PI / 180.0f),
+              0.0f, 50.0f, 40.0f,  // Look at point (center of cube approximately)
+              0.0f, 1.0f, 0.0f);
+
+    // Draw grid and axes
+    drawGrid();
+    drawAxes();
+
+    // Draw original cube (always visible with lower opacity in "all" mode)
+    if (visualizationMode == 0 || visualizationMode == 5) {
+        float alpha = (visualizationMode == 5) ? 0.3f : 1.0f;
+        glColor4f(1.0f, 1.0f, 1.0f, alpha);
+        drawCube(1.0f, 1.0f, 1.0f, alpha);
+    }
+
+    // Apply transformations based on mode
+    const auto reflectX = createReflectionX<float>();
+    const auto reflectY = createReflectionY<float>();
+    const auto reflectZ = createReflectionZ<float>();
+    const auto reflectOrigin = createReflectionOrigin<float>();
+
+    // Draw reflected cubes
+    if (visualizationMode == 1 || visualizationMode == 5) {
+        // X-axis reflection (YZ plane) - Cyan
+        glPushMatrix();
+        float glMatrix[16];
+        matrixToGLFormat(reflectX, glMatrix);
+        glMultMatrixf(glMatrix);
+        drawCube(0.0f, 1.0f, 1.0f); // Cyan
+        glPopMatrix();
+    }
+
+    if (visualizationMode == 2 || visualizationMode == 5) {
+        // Y-axis reflection (XZ plane) - Magenta
+        glPushMatrix();
+        float glMatrix[16];
+        matrixToGLFormat(reflectY, glMatrix);
+        glMultMatrixf(glMatrix);
+        drawCube(1.0f, 0.0f, 1.0f); // Magenta
+        glPopMatrix();
+    }
+
+    if (visualizationMode == 3 || visualizationMode == 5) {
+        // Z-axis reflection (XY plane) - Yellow
+        glPushMatrix();
+        float glMatrix[16];
+        matrixToGLFormat(reflectZ, glMatrix);
+        glMultMatrixf(glMatrix);
+        drawCube(1.0f, 1.0f, 0.0f); // Yellow
+        glPopMatrix();
+    }
+
+    if (visualizationMode == 4 || visualizationMode == 5) {
+        // Origin reflection - Orange
+        glPushMatrix();
+        float glMatrix[16];
+        matrixToGLFormat(reflectOrigin, glMatrix);
+        glMultMatrixf(glMatrix);
+        drawCube(1.0f, 0.5f, 0.0f); // Orange
+        glPopMatrix();
+    }
+
+    // Draw UI text
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, glutGet(GLUT_WINDOW_WIDTH), 0, glutGet(GLUT_WINDOW_HEIGHT));
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glColor3f(1.0f, 1.0f, 1.0f);
+    std::string modeText;
+    switch (visualizationMode) {
+        case 0: modeText = "Mode: Original Cube (White)"; break;
+        case 1: modeText = "Mode: X-axis Reflection (Cyan) - YZ Plane"; break;
+        case 2: modeText = "Mode: Y-axis Reflection (Magenta) - XZ Plane"; break;
+        case 3: modeText = "Mode: Z-axis Reflection (Yellow) - XY Plane"; break;
+        case 4: modeText = "Mode: Origin Reflection (Orange)"; break;
+        case 5: modeText = "Mode: All Reflections"; break;
+    }
+    drawText(10, glutGet(GLUT_WINDOW_HEIGHT) - 20, modeText);
+    drawText(10, glutGet(GLUT_WINDOW_HEIGHT) - 40, "Keys: 0-5 (modes), Mouse drag to rotate, Scroll to zoom");
+    drawText(10, glutGet(GLUT_WINDOW_HEIGHT) - 60, "Axes: X=Red, Y=Green, Z=Blue");
+
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+
+    glutSwapBuffers();
+}
+
+void reshape(int w, int h) {
+    glViewport(0, 0, w, h);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(45.0, (double)w / (double)h, 1.0, 2000.0);
+    glMatrixMode(GL_MODELVIEW);
+}
+
+void keyboard(unsigned char key, int x, int y) {
+    switch (key) {
+        case '0': visualizationMode = 0; break;
+        case '1': visualizationMode = 1; break;
+        case '2': visualizationMode = 2; break;
+        case '3': visualizationMode = 3; break;
+        case '4': visualizationMode = 4; break;
+        case '5': visualizationMode = 5; break;
+        case 27: // ESC
+            exit(0);
+            break;
+    }
+    glutPostRedisplay();
+}
+
+void mouse(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON) {
+        if (state == GLUT_DOWN) {
+            isRotating = true;
+            lastMouseX = x;
+            lastMouseY = y;
+        } else {
+            isRotating = false;
+        }
+    }
+
+    // Mouse wheel for zoom
+    if (button == 3) { // Scroll up
+        cameraDistance *= 0.9f;
+        glutPostRedisplay();
+    } else if (button == 4) { // Scroll down
+        cameraDistance *= 1.1f;
+        glutPostRedisplay();
+    }
+}
+
+void motion(int x, int y) {
+    if (isRotating) {
+        cameraAngleY += (x - lastMouseX) * 0.5f;
+        cameraAngleX += (y - lastMouseY) * 0.5f;
+
+        // Clamp vertical angle
+        if (cameraAngleX > 89.0f) cameraAngleX = 89.0f;
+        if (cameraAngleX < -89.0f) cameraAngleX = -89.0f;
+
+        lastMouseX = x;
+        lastMouseY = y;
+        glutPostRedisplay();
+    }
+}
+
+void init() {
+    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+}
+
+int main(int argc, char** argv) {
     try {
-        // std::cout << "=== Transformation Matrices ===\n\n";
-        //
-        // auto translation = createTranslationMatrix(2.0f, 3.0f, 1.0f);
-        // printMatrix(translation, "Translation Matrix (2, 3, 1)");
-        //
-        // auto scale = createScaleMatrix(2.0f, 1.5f, 0.5f);
-        // printMatrix(scale, "Scale Matrix (2x, 1.5y, 0.5z)");
-        //
-        // auto scaleAroundPoint = createScaleMatrixAroundPoint(2.0f, 2.0f, 2.0f, 1.0f, 1.0f, 1.0f);
-        // printMatrix(scaleAroundPoint, "Scale 2x around point (1, 1, 1)");
+        // Print transformation info to console
+        std::cout << "=== Matrix Reflection Visualizer ===\n";
+        std::cout << "Controls:\n";
+        std::cout << "  0-5: Switch visualization modes\n";
+        std::cout << "  Mouse drag: Rotate view\n";
+        std::cout << "  Mouse wheel: Zoom in/out\n";
+        std::cout << "  ESC: Exit\n\n";
 
+        std::cout << "Original Cube vertices:\n";
+        std::cout << "  p0: (40, 30, 0)\n";
+        std::cout << "  p1: (40, 130, 0)\n";
+        std::cout << "  p2: (40, 130, 80)\n";
+        std::cout << "  p3: (40, 30, 80)\n";
+        std::cout << "  p4: (140, 30, 0)\n";
+        std::cout << "  p5: (140, 130, 0)\n";
+        std::cout << "  p6: (140, 130, 80)\n";
+        std::cout << "  p7: (140, 30, 80)\n\n";
 
+        // Initialize GLUT
+        glutInit(&argc, argv);
+        glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+        glutInitWindowSize(1024, 768);
+        glutCreateWindow("3D Matrix Reflection Visualizer");
 
+        init();
 
+        glutDisplayFunc(display);
+        glutReshapeFunc(reshape);
+        glutKeyboardFunc(keyboard);
+        glutMouseFunc(mouse);
+        glutMotionFunc(motion);
 
-        // std::cout << "=== Performing Transformations ===\n\n";
-        // Matrix<float> point = {{2.0f}, {2.0f}, {2.0f}, {1.0f}};
-        // printMatrix(point, "Original Point (2, 2, 2)");
-        //
-        // auto translatedPoint = multiplyMatrices(translation, point);
-        // printMatrix(translatedPoint, "After Translation");
-        //
-        // auto scaledPoint = multiplyMatrices(scale, point);
-        // printMatrix(scaledPoint, "After Scale from Origin");
-        //
-        // auto scaledAroundPointResult = multiplyMatrices(scaleAroundPoint, point);
-        // printMatrix(scaledAroundPointResult, "After Scale around Point (1,1,1)");
-
-
-
-
-
-        // NOTE: Matrices are multiplied in reverse order of application
-        // So, the order is Translate -> Scale (application order)
-        // Theoretically: Transformed = [Translation] * [Rotation] * [Scale] * [Original Vector]
-        // std::cout << "=== Performing Multiple Transformations ===\n";
-        // auto combined = multiplyMatrices(scale, translation);
-        // printMatrix(combined, "Combined: Scale * Translation");
-        //
-        // auto combinedResult = multiplyMatrices(combined, point);
-        // printMatrix(combinedResult, "Point after Combined Transform");
-
-        // Mathematically equivalent to:
-        // auto temp = multiplyMatrices(scale, point);
-        // auto temp2 = multiplyMatrices(temp, translation);
-
-
-
-        //
-        // auto scaleOneThird = createScaleMatrix(1.0f/3.0f, 1.0f/3.0f, 1.0f/3.0f);
-        // printMatrix(scaleOneThird, "Reduce to 1/3 relative to origin");
-        //
-        // std::vector<Matrix<float>> cubeVertices = {
-        //     {{40.0f}, {30.0f}, {0.0f}, {1.0f}},   // p0
-        //     {{40.0f}, {130.0f}, {0.0f}, {1.0f}},  // p1
-        //     {{40.0f}, {130.0f}, {80.0f}, {1.0f}}, // p2
-        //     {{40.0f}, {30.0f}, {80.0f}, {1.0f}},  // p3
-        //     {{140.0f}, {30.0f}, {0.0f}, {1.0f}},  // p4
-        //     {{140.0f}, {130.0f}, {0.0f}, {1.0f}}, // p5
-        //     {{140.0f}, {130.0f}, {80.0f}, {1.0f}},// p6
-        //     {{140.0f}, {30.0f}, {80.0f}, {1.0f}}  // p7
-        // };
-        //
-        // std::cout << "Original Cube Vertices:\n";
-        // for (int i = 0; i < cubeVertices.size(); ++i) {
-        //     printMatrix(cubeVertices[i], "p" + std::to_string(i) +
-        //                " (" + std::to_string((int)cubeVertices[i][0][0]) + ", " +
-        //                std::to_string((int)cubeVertices[i][1][0]) + ", " +
-        //                std::to_string((int)cubeVertices[i][2][0]) + ")");
-        // }
-        //
-        // std::cout << "Transformed Cube Vertices (1/3 scale from origin):\n";
-        // for (int i = 0; i < cubeVertices.size(); ++i) {
-        //     auto transformedVertex = multiplyMatrices(scaleOneThird, cubeVertices[i]);
-        //     printMatrix(transformedVertex, "p" + std::to_string(i) + " scaled");
-        // }
-
-
-
-        const auto reflectX = createReflectionX<float>();
-        const auto reflectY = createReflectionY<float>();
-        const auto reflectZ = createReflectionZ<float>();
-        const auto reflectOrigin = createReflectionOrigin<float>();
-
-        const std::vector<Matrix<float>> cubeVertices = {
-            {{40.0f}, {30.0f}, {0.0f}, {1.0f}},   // p0
-            {{40.0f}, {130.0f}, {0.0f}, {1.0f}},  // p1
-            {{40.0f}, {130.0f}, {80.0f}, {1.0f}}, // p2
-            {{40.0f}, {30.0f}, {80.0f}, {1.0f}},  // p3
-            {{140.0f}, {30.0f}, {0.0f}, {1.0f}},  // p4
-            {{140.0f}, {130.0f}, {0.0f}, {1.0f}}, // p5
-            {{140.0f}, {130.0f}, {80.0f}, {1.0f}},// p6
-            {{140.0f}, {30.0f}, {80.0f}, {1.0f}}  // p7
-        };
-
-        std::cout << "=== Original Cube ===\n";
-        for (int i = 0; i < cubeVertices.size(); ++i) {
-            printMatrix(cubeVertices[i], "p" + std::to_string(i) +
-                       " (" + std::to_string(static_cast<int>(cubeVertices[i][0][0])) + ", " +
-                       std::to_string(static_cast<int>(cubeVertices[i][1][0])) + ", " +
-                       std::to_string(static_cast<int>(cubeVertices[i][2][0])) + ")");
-        }
-
-        std::cout << "=== Reflection across X-axis (YZ plane) ===\n";
-        for (int i = 0; i < cubeVertices.size(); ++i) {
-            auto reflected = multiplyMatrices(reflectX, cubeVertices[i]);
-            printMatrix(reflected, "p" + std::to_string(i) + " reflected X");
-        }
-
-        std::cout << "=== Reflection across Y-axis (XZ plane) ===\n";
-        for (int i = 0; i < cubeVertices.size(); ++i) {
-            auto reflected = multiplyMatrices(reflectY, cubeVertices[i]);
-            printMatrix(reflected, "p" + std::to_string(i) + " reflected Y");
-        }
-
-        std::cout << "=== Reflection across Z-axis (XY plane) ===\n";
-        for (int i = 0; i < cubeVertices.size(); ++i) {
-            auto reflected = multiplyMatrices(reflectZ, cubeVertices[i]);
-            printMatrix(reflected, "p" + std::to_string(i) + " reflected Z");
-        }
-
-        std::cout << "=== Reflection through Origin ===\n";
-        for (int i = 0; i < cubeVertices.size(); ++i) {
-            auto reflected = multiplyMatrices(reflectOrigin, cubeVertices[i]);
-            printMatrix(reflected, "p" + std::to_string(i) + " reflected origin");
-        }
+        glutMainLoop();
 
     } catch (const std::exception& e) {
         std::cout << "Error: " << e.what() << "\n";
+        return 1;
     }
 
     return 0;
